@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PlateViewport, type PlateViewMode } from "@/components/plates/PlateViewport";
+import { ProcessedRunPlayer } from "@/components/plates/ProcessedRunPlayer";
 import { WaveformChart } from "@/components/charts/WaveformChart";
 import { SpectrumChart } from "@/components/charts/SpectrumChart";
 import { ChartPanel } from "@/components/charts/ChartPanel";
@@ -10,17 +11,21 @@ import { EvidenceBadge } from "@/components/ui/EvidenceBadge";
 import { Button } from "@/components/ui/Button";
 import { SliderField, SelectField, ControlSection } from "@/components/ui/ParameterField";
 import { useLiveCymatics, DEFAULT_LIVE_SETTINGS } from "@/hooks/useLiveCymatics";
+import { useOfflineProcessing } from "@/hooks/useOfflineProcessing";
 import { PLATE_PRESETS } from "@/lib/physics/presets";
 import { SaveExperimentButton } from "@/components/experiments/SaveExperimentButton";
+import { startRecording, stopRecording, type MicRecorderSession } from "@/lib/audio/micRecorder";
+import { decodeAudioFile, type DecodedAudio } from "@/lib/audio/decode";
+import { encodeWav } from "@/lib/audio/signalGenerator";
 import { formatHz } from "@/lib/utils";
-import { Mic, MicOff, Snowflake } from "lucide-react";
+import { Mic, MicOff, Snowflake, Circle, Square, Loader2, ArrowLeft } from "lucide-react";
 
 export default function LivePage() {
   const [controlMode, setControlMode] = useState<"basic" | "advanced">("basic");
   const [presetId, setPresetId] = useState(PLATE_PRESETS[0].id);
   const [settings, setSettings] = useState(DEFAULT_LIVE_SETTINGS);
   const [viewMode, setViewMode] = useState<PlateViewMode>("particles");
-  const [responseMode, setResponseMode] = useState<"scientific" | "demonstration">("scientific");
+  const [responseMode, setResponseMode] = useState<"scientific" | "demonstration">("demonstration");
 
   const plate = useMemo(() => PLATE_PRESETS.find((p) => p.id === presetId) ?? PLATE_PRESETS[0], [presetId]);
   const activeSettings = useMemo(() => ({ ...settings, responseMode }), [settings, responseMode]);
@@ -28,27 +33,80 @@ export default function LivePage() {
 
   const isActive = live.status === "active";
 
+  const [recording, setRecording] = useState(false);
+  const [recordedAudio, setRecordedAudio] = useState<DecodedAudio | null>(null);
+  const recorderRef = useRef<MicRecorderSession | null>(null);
+  const offline = useOfflineProcessing();
+
+  async function toggleRecording() {
+    if (recording) {
+      setRecording(false);
+      const session = recorderRef.current;
+      if (!session) return;
+      const blob = await stopRecording(session);
+      recorderRef.current = null;
+      try {
+        const decoded = await decodeAudioFile(blob);
+        setRecordedAudio(decoded);
+        await offline.process(plate, decoded, 0, decoded.durationS);
+      } catch {
+        // Decoding failed; stay on the live view.
+      }
+      return;
+    }
+    const stream = live.getMediaStream();
+    if (!stream) return;
+    recorderRef.current = startRecording(stream);
+    setRecording(true);
+  }
+
+  function backToLive() {
+    setRecordedAudio(null);
+    offline.reset();
+  }
+
   return (
     <div>
       <PageHeader
         title="Live Cymatics"
         description="Microphone measurements driving a simulated plate."
         actions={
-          <SaveExperimentButton
-            disabled={!live.displacementField}
-            disabledReason="Start a session to save a result"
-            buildRecord={() => ({
-              sourceType: "microphone",
-              evidenceCategories: ["measured-audio", "physics-simulation"],
-              plateConfig: plate,
-              activeModeIds: live.activeModeIds,
-              measurements: {
-                rmsDbfs: Number.isFinite(live.rmsDbfs) ? live.rmsDbfs : -100,
-                dominantFrequencyHz: live.dominantFrequencyHz ?? 0,
-                spectralCentroidHz: live.spectralCentroidHz,
-              },
-            })}
-          />
+          recordedAudio && offline.status === "done" && offline.run ? (
+            <SaveExperimentButton
+              disabled={false}
+              disabledReason=""
+              mediaBlob={encodeWav(recordedAudio.samples, recordedAudio.sampleRate)}
+              buildRecord={() => ({
+                sourceType: "microphone",
+                evidenceCategories: ["measured-audio", "physics-simulation"],
+                plateConfig: plate,
+                activeModeIds: offline.run!.frames.at(-1) ? Object.keys(offline.run!.frames.at(-1)!.weights) : [],
+                measurements: { durationS: recordedAudio.durationS },
+                audioMeta: {
+                  durationS: recordedAudio.durationS,
+                  sampleRate: recordedAudio.sampleRate,
+                  channels: recordedAudio.channels,
+                },
+                sourceDetails: { startS: 0, endS: recordedAudio.durationS },
+              })}
+            />
+          ) : (
+            <SaveExperimentButton
+              disabled={!live.displacementField}
+              disabledReason="Start a session to save a result"
+              buildRecord={() => ({
+                sourceType: "microphone",
+                evidenceCategories: ["measured-audio", "physics-simulation"],
+                plateConfig: plate,
+                activeModeIds: live.activeModeIds,
+                measurements: {
+                  rmsDbfs: Number.isFinite(live.rmsDbfs) ? live.rmsDbfs : -100,
+                  dominantFrequencyHz: live.dominantFrequencyHz ?? 0,
+                  spectralCentroidHz: live.spectralCentroidHz,
+                },
+              })}
+            />
+          )
         }
       />
 
@@ -82,9 +140,19 @@ export default function LivePage() {
             {live.clipping && <span className="ml-1 text-[var(--color-warning)]">Clipping</span>}
           </span>
           {isActive ? (
-            <Button variant="secondary" onClick={() => live.stop()}>
-              <MicOff className="h-4 w-4" /> Stop microphone
-            </Button>
+            <>
+              <Button
+                variant={recording ? "destructive" : "secondary"}
+                onClick={toggleRecording}
+                disabled={offline.status === "processing"}
+              >
+                {recording ? <Square className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+                {recording ? "Stop recording" : "Record a take"}
+              </Button>
+              <Button variant="secondary" onClick={() => live.stop()}>
+                <MicOff className="h-4 w-4" /> Stop microphone
+              </Button>
+            </>
           ) : (
             <Button variant="primary" onClick={() => live.start()}>
               <Mic className="h-4 w-4" /> Start microphone
@@ -93,8 +161,30 @@ export default function LivePage() {
         </div>
       </div>
 
+      {offline.status === "processing" && (
+        <div className="flex items-center gap-2 border-b border-[var(--color-divider)] bg-[var(--color-surface)] px-4 py-3 text-sm md:px-6 lg:px-8">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Processing your recording for smooth playback… {Math.round(offline.progress * 100)}%
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:p-8">
         <div className="flex flex-col gap-4">
+          {recordedAudio && offline.status === "done" && offline.run ? (
+            <>
+              <Button variant="tertiary" onClick={backToLive} className="self-start">
+                <ArrowLeft className="h-4 w-4" /> Back to live view
+              </Button>
+              <ProcessedRunPlayer
+                audio={recordedAudio}
+                startS={0}
+                endS={recordedAudio.durationS}
+                run={offline.run}
+                viewMode={viewMode}
+                evidence="measured-audio"
+              />
+            </>
+          ) : (
           <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -134,6 +224,7 @@ export default function LivePage() {
               />
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <ChartPanel title="Waveform" evidence="measured-audio">

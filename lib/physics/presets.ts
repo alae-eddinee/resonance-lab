@@ -9,7 +9,7 @@ const basePlate = (overrides: Partial<PlateConfig> & { id: string; name: string 
   exciterPosition: { x: 0.5, y: 0.5 },
   damping: 0.02,
   maxModeNumber: 6,
-  simulationResolution: 96,
+  simulationResolution: 64,
   ...overrides,
 });
 

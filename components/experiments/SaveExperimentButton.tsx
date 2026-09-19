@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/ParameterField";
-import { saveExperiment } from "@/lib/experiments/db";
+import { saveExperiment, saveMediaBlob } from "@/lib/experiments/db";
 import { validateExperimentRecord } from "@/lib/validation/schemas";
 import { generateId } from "@/lib/utils";
 import type { ExperimentRecord } from "@/lib/experiments/types";
@@ -11,16 +11,21 @@ import type { ExperimentRecord } from "@/lib/experiments/types";
 type PartialRecord = Pick<
   ExperimentRecord,
   "sourceType" | "evidenceCategories" | "plateConfig" | "activeModeIds" | "measurements" | "audioMeta"
->;
+> & {
+  sourceDetails?: ExperimentRecord["sourceDetails"];
+};
 
 export function SaveExperimentButton({
   disabled,
   disabledReason,
   buildRecord,
+  mediaBlob,
 }: {
   disabled: boolean;
   disabledReason: string;
   buildRecord: () => PartialRecord;
+  /** When provided, saved alongside the record so the experiment can be replayed exactly as it ran. */
+  mediaBlob?: Blob | null;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(() => `Experiment ${new Date().toLocaleString()}`);
@@ -30,8 +35,23 @@ export function SaveExperimentButton({
     setStatus("saving");
     const now = new Date().toISOString();
     const partial = buildRecord();
+    const id = generateId();
+
+    let hasRetainedMedia = false;
+    let sourceDetails = partial.sourceDetails;
+    if (mediaBlob) {
+      const mediaId = generateId();
+      try {
+        await saveMediaBlob({ id: mediaId, experimentId: id, kind: "audio", blob: mediaBlob });
+        hasRetainedMedia = true;
+        sourceDetails = { ...sourceDetails, mediaId };
+      } catch {
+        // Media save failed; still save the rest of the record without it.
+      }
+    }
+
     const record: ExperimentRecord = {
-      id: generateId(),
+      id,
       schemaVersion: 1,
       appVersion: "0.1.0",
       title,
@@ -39,8 +59,9 @@ export function SaveExperimentButton({
       notes: "",
       createdAt: now,
       updatedAt: now,
-      hasRetainedMedia: false,
+      hasRetainedMedia,
       ...partial,
+      sourceDetails,
     };
     const result = validateExperimentRecord(record);
     if (!result.success) {
@@ -81,7 +102,9 @@ export function SaveExperimentButton({
             <h2 className="mb-3 text-lg font-semibold">Save experiment</h2>
             <TextField label="Title" value={title} onChange={setTitle} />
             <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-              Stored in this browser. Original audio/media is not included unless separately recorded and retained.
+              {mediaBlob
+                ? "Stored in this browser, including the audio, so you can replay this experiment exactly as it ran."
+                : "Stored in this browser. Original audio/media is not included unless separately recorded."}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="tertiary" onClick={() => setOpen(false)}>

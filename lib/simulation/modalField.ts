@@ -21,7 +21,7 @@ export function computeModeWeights(
   peaks: SpectralPeak[],
   options: { toleranceCents?: number; mode: "scientific" | "demonstration" } = { mode: "scientific" },
 ): ModeWeight[] {
-  const toleranceCents = options.toleranceCents ?? (options.mode === "demonstration" ? 400 : 120);
+  const toleranceCents = options.toleranceCents ?? (options.mode === "demonstration" ? 900 : 150);
   const weights = new Map<string, number>();
 
   for (const peak of peaks) {

@@ -60,6 +60,14 @@ export const experimentRecordSchema = z.object({
   measurements: z.record(z.string(), z.number()).default({}),
   hasRetainedMedia: z.boolean().default(false),
   thumbnailDataUrl: z.string().optional(),
+  sourceDetails: z
+    .object({
+      toneFrequencyHz: z.number().optional(),
+      mediaId: z.string().optional(),
+      startS: z.number().optional(),
+      endS: z.number().optional(),
+    })
+    .optional(),
 });
 
 export type ExperimentRecordInput = z.infer<typeof experimentRecordSchema>;

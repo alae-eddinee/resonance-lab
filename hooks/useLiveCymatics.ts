@@ -43,7 +43,7 @@ export const DEFAULT_LIVE_SETTINGS: LiveCymaticsSettings = {
   attack: 0.4,
   release: 0.12,
   updateRateHz: 24,
-  responseMode: "scientific",
+  responseMode: "demonstration",
 };
 
 export interface LiveCymaticsResult {
@@ -70,6 +70,7 @@ export interface LiveCymaticsResult {
   setMonitoring: (v: boolean) => void;
   monitorVolume: number;
   setMonitorVolume: (v: number) => void;
+  getMediaStream: () => MediaStream | null;
 }
 
 export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSettings): LiveCymaticsResult {
@@ -231,6 +232,8 @@ export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSetti
     if (sessionRef.current) setMicrophoneMonitoring(sessionRef.current, monitoring, volume);
   }, [monitoring]);
 
+  const getMediaStream = useCallback(() => sessionRef.current?.stream ?? null, []);
+
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -262,5 +265,6 @@ export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSetti
     setMonitoring,
     monitorVolume,
     setMonitorVolume,
+    getMediaStream,
   };
 }

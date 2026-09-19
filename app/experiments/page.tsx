@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EvidenceBadge, type EvidenceCategory } from "@/components/ui/EvidenceBadge";
-import { listExperiments, deleteExperiment, saveExperiment } from "@/lib/experiments/db";
+import { ProcessedRunPlayer } from "@/components/plates/ProcessedRunPlayer";
+import { listExperiments, deleteExperiment, saveExperiment, getMediaBlob } from "@/lib/experiments/db";
 import { validateExperimentRecord } from "@/lib/validation/schemas";
+import { useOfflineProcessing } from "@/hooks/useOfflineProcessing";
+import { decodeAudioFile, type DecodedAudio } from "@/lib/audio/decode";
 import type { ExperimentRecord } from "@/lib/experiments/types";
 import { downloadJson, downloadCsv } from "@/lib/export/exporters";
+import { Loader2 } from "lucide-react";
 
 export default function ExperimentsPage() {
   const router = useRouter();
@@ -16,6 +20,11 @@ export default function ExperimentsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importError, setImportError] = useState<string | null>(null);
+
+  const [replayId, setReplayId] = useState<string | null>(null);
+  const [replayAudio, setReplayAudio] = useState<DecodedAudio | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const offline = useOfflineProcessing();
 
   async function refresh() {
     setLoading(true);
@@ -42,6 +51,11 @@ export default function ExperimentsPage() {
 
   async function handleDelete(id: string) {
     await deleteExperiment(id);
+    if (replayId === id) {
+      setReplayId(null);
+      setReplayAudio(null);
+      offline.reset();
+    }
     await refresh();
   }
 
@@ -64,6 +78,37 @@ export default function ExperimentsPage() {
 
   function compareSelected() {
     router.push(`/compare?ids=${Array.from(selected).join(",")}`);
+  }
+
+  async function handleReplay(record: ExperimentRecord) {
+    setReplayError(null);
+    if (replayId === record.id) {
+      setReplayId(null);
+      setReplayAudio(null);
+      offline.reset();
+      return;
+    }
+    const mediaId = record.sourceDetails?.mediaId;
+    if (!mediaId || !record.plateConfig) return;
+    setReplayId(record.id);
+    setReplayAudio(null);
+    offline.reset();
+    const media = await getMediaBlob(mediaId);
+    if (!media) {
+      setReplayError("The recorded audio for this experiment is no longer available in this browser.");
+      setReplayId(null);
+      return;
+    }
+    try {
+      const decoded = await decodeAudioFile(media.blob);
+      setReplayAudio(decoded);
+      const startS = record.sourceDetails?.startS ?? 0;
+      const endS = record.sourceDetails?.endS ?? decoded.durationS;
+      await offline.process(record.plateConfig, decoded, startS, endS);
+    } catch {
+      setReplayError("Could not decode the saved audio for replay.");
+      setReplayId(null);
+    }
   }
 
   return (
@@ -112,46 +157,79 @@ export default function ExperimentsPage() {
         ) : (
           <ul className="flex flex-col divide-y divide-[var(--color-divider)] rounded-[var(--radius-md)] border border-[var(--color-divider)]">
             {records.map((record) => (
-              <li key={record.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(record.id)}
-                    onChange={() => toggleSelect(record.id)}
-                    className="mt-1 h-5 w-5"
-                    aria-label={`Select ${record.title}`}
-                  />
-                  <div>
-                    <p className="font-medium">{record.title}</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {record.sourceType} · {new Date(record.updatedAt).toLocaleString()}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {record.evidenceCategories.map((c) => (
-                        <EvidenceBadge key={c} category={c as EvidenceCategory} />
-                      ))}
+              <li key={record.id} className="flex flex-col gap-3 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(record.id)}
+                      onChange={() => toggleSelect(record.id)}
+                      className="mt-1 h-5 w-5"
+                      aria-label={`Select ${record.title}`}
+                    />
+                    <div>
+                      <p className="font-medium">{record.title}</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        {record.sourceType} · {new Date(record.updatedAt).toLocaleString()}
+                        {record.hasRetainedMedia && " · audio saved"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {record.evidenceCategories.map((c) => (
+                          <EvidenceBadge key={c} category={c as EvidenceCategory} />
+                        ))}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                    {record.hasRetainedMedia && record.sourceDetails?.mediaId && (
+                      <Button
+                        variant={replayId === record.id ? "secondary" : "primary"}
+                        onClick={() => handleReplay(record)}
+                      >
+                        {replayId === record.id ? "Close replay" : "Replay"}
+                      </Button>
+                    )}
+                    <Button variant="tertiary" onClick={() => downloadJson(record, record.title)}>
+                      Export JSON
+                    </Button>
+                    <Button
+                      variant="tertiary"
+                      onClick={() =>
+                        downloadCsv(
+                          Object.entries(record.measurements).map(([metric, value]) => ({ metric, value })),
+                          `${record.title}-metrics`,
+                        )
+                      }
+                    >
+                      Export CSV
+                    </Button>
+                    <Button variant="destructive" onClick={() => handleDelete(record.id)}>
+                      Delete
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="tertiary" onClick={() => downloadJson(record, record.title)}>
-                    Export JSON
-                  </Button>
-                  <Button
-                    variant="tertiary"
-                    onClick={() =>
-                      downloadCsv(
-                        Object.entries(record.measurements).map(([metric, value]) => ({ metric, value })),
-                        `${record.title}-metrics`,
-                      )
-                    }
-                  >
-                    Export CSV
-                  </Button>
-                  <Button variant="destructive" onClick={() => handleDelete(record.id)}>
-                    Delete
-                  </Button>
-                </div>
+
+                {replayId === record.id && (
+                  <div className="border-t border-[var(--color-divider)] pt-3">
+                    {offline.status === "processing" && (
+                      <p className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Reprocessing saved audio…{" "}
+                        {Math.round(offline.progress * 100)}%
+                      </p>
+                    )}
+                    {replayError && <p className="text-sm text-[var(--color-danger)]">{replayError}</p>}
+                    {replayAudio && offline.status === "done" && offline.run && (
+                      <ProcessedRunPlayer
+                        audio={replayAudio}
+                        startS={0}
+                        endS={replayAudio.durationS}
+                        run={offline.run}
+                        viewMode="particles"
+                        evidence="measured-audio"
+                      />
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

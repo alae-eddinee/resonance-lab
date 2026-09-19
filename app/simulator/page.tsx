@@ -19,7 +19,7 @@ import { encodeWav } from "@/lib/audio/signalGenerator";
 import { useSharedAudioSelection } from "@/lib/audio/sharedAudioStore";
 import type { SpectralPeak } from "@/lib/audio/analysis";
 import { formatHz } from "@/lib/utils";
-import { Play, Square, Loader2, Mic, MicOff } from "lucide-react";
+import { Play, Square, Loader2, Mic, MicOff, RefreshCw } from "lucide-react";
 
 type Source = "tone" | "upload" | "microphone";
 
@@ -28,6 +28,7 @@ export default function SimulatorPage() {
   const [plate, setPlate] = useState(PLATE_PRESETS[0]);
   const [source, setSource] = useState<Source>("tone");
   const [viewMode, setViewMode] = useState<PlateViewMode>("particles");
+  const [particleReset, setParticleReset] = useState(0);
 
   const [toneFrequency, setToneFrequencyState] = useState(220);
   const [volume, setVolume] = useState(0.5);
@@ -195,6 +196,7 @@ export default function SimulatorPage() {
                 view={viewMode}
                 frozen={false}
                 running={isPlaying}
+                resetSignal={particleReset}
                 className="mx-auto max-w-[560px]"
               />
 
@@ -229,6 +231,11 @@ export default function SimulatorPage() {
                       { value: "nodal", label: "Nodal contours" },
                     ]}
                   />
+                  {viewMode === "particles" && (
+                    <Button variant="secondary" onClick={() => setParticleReset((n) => n + 1)}>
+                      <RefreshCw className="h-4 w-4" /> Reset particles
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[var(--color-divider)] pt-3">
@@ -271,6 +278,11 @@ export default function SimulatorPage() {
                       { value: "nodal", label: "Nodal contours" },
                     ]}
                   />
+                  {viewMode === "particles" && (
+                    <Button variant="secondary" onClick={() => setParticleReset((n) => n + 1)}>
+                      <RefreshCw className="h-4 w-4" /> Reset particles
+                    </Button>
+                  )}
                 </div>
               )}
               {micStatus === "denied" && (

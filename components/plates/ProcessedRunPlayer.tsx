@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PlateViewport, type PlateViewMode } from "@/components/plates/PlateViewport";
 import { EvidenceBadge } from "@/components/ui/EvidenceBadge";
@@ -31,6 +31,7 @@ export function ProcessedRunPlayer({
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.8);
+  const [particleReset, setParticleReset] = useState(0);
 
   const src = useMemo(() => URL.createObjectURL(encodeWav(audio.samples, audio.sampleRate)), [audio]);
   useEffect(() => () => URL.revokeObjectURL(src), [src]);
@@ -93,6 +94,7 @@ export function ProcessedRunPlayer({
           view={viewMode}
           frozen={false}
           running={playing}
+          resetSignal={particleReset}
           className="mx-auto max-w-[560px]"
         />
 
@@ -104,6 +106,11 @@ export function ProcessedRunPlayer({
           <Button variant="secondary" onClick={restart} aria-label="Restart">
             <RotateCcw className="h-4 w-4" />
           </Button>
+          {viewMode === "particles" && (
+            <Button variant="secondary" onClick={() => setParticleReset((n) => n + 1)} aria-label="Reset particles">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
           <input
             type="range"
             min={0}

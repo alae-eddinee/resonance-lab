@@ -23,6 +23,27 @@ function insideShape(shape: PlateShape, x: number, y: number): boolean {
   return dx * dx + dy * dy <= 0.25;
 }
 
+/**
+ * A simply supported (or approximated) plate's displacement is mathematically
+ * zero along the *entire* boundary by definition, which would otherwise make
+ * the whole edge read as maximum sand density regardless of the actual mode
+ * pattern -- particles pile onto the frame instead of the interior nodal
+ * lines that make a Chladni figure recognizable. This fades attraction to
+ * zero right at the true edge, rising to full strength a short distance in,
+ * so particles respond to the interior pattern instead of the trivial edge.
+ */
+function edgeFade(shape: PlateShape, x: number, y: number): number {
+  const margin = 0.07;
+  if (shape === "circle") {
+    const dx = x - 0.5;
+    const dy = y - 0.5;
+    const r = Math.sqrt(dx * dx + dy * dy) / 0.5;
+    return Math.max(0, Math.min(1, (1 - r) / margin));
+  }
+  const distToEdge = Math.min(x, 1 - x, y, 1 - y);
+  return Math.max(0, Math.min(1, distToEdge / margin));
+}
+
 function diverging(value: number): [number, number, number] {
   const stops: Array<[number, [number, number, number]]> = [
     [-1, [0x89, 0xbe, 0xd1]],
@@ -36,6 +57,20 @@ function diverging(value: number): [number, number, number] {
   return [mix(a[1][0], b[1][0]), mix(a[1][1], b[1][1]), mix(a[1][2], b[1][2])];
 }
 
+function scatterParticles(shape: PlateShape, count: number): Particle[] {
+  const particles: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    let x = Math.random();
+    let y = Math.random();
+    while (!insideShape(shape, x, y)) {
+      x = Math.random();
+      y = Math.random();
+    }
+    particles.push({ x, y });
+  }
+  return particles;
+}
+
 export function PlateViewport({
   shape,
   resolution,
@@ -44,6 +79,7 @@ export function PlateViewport({
   view,
   frozen,
   running,
+  resetSignal,
   className,
 }: {
   shape: PlateShape;
@@ -53,6 +89,8 @@ export function PlateViewport({
   view: PlateViewMode;
   frozen: boolean;
   running: boolean;
+  /** Bump this (e.g. a counter) to re-scatter particles back to random positions. */
+  resetSignal?: number;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,20 +105,13 @@ export function PlateViewport({
   }, [displacementField, sandDensity, resolution, view, frozen, running, shape]);
 
   useEffect(() => {
-    if (particlesRef.current.length === 0) {
-      const particles: Particle[] = [];
-      for (let i = 0; i < 900; i++) {
-        let x = Math.random();
-        let y = Math.random();
-        while (!insideShape(shape, x, y)) {
-          x = Math.random();
-          y = Math.random();
-        }
-        particles.push({ x, y });
-      }
-      particlesRef.current = particles;
-    }
+    if (particlesRef.current.length === 0) particlesRef.current = scatterParticles(shape, 900);
   }, [shape]);
+
+  useEffect(() => {
+    if (resetSignal !== undefined) particlesRef.current = scatterParticles(shape, 900);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -150,21 +181,31 @@ export function PlateViewport({
       } else {
         const particles = particlesRef.current;
         const animate = stateRef.current.running && !stateRef.current.frozen && !prefersReducedMotion;
+        const currentShape = stateRef.current.shape;
         ctx.fillStyle = "#dcc38e";
         for (const p of particles) {
           if (animate && sand) {
-            const density = sampleGrid(sand, res, p.x, p.y);
-            const dxSample = sampleGrid(sand, res, Math.min(1, p.x + 0.02), p.y) - density;
-            const dySample = sampleGrid(sand, res, p.x, Math.min(1, p.y + 0.02)) - density;
-            const speed = 0.0025 * (1 - density * 0.6);
-            p.x += dxSample * 0.4 + (Math.random() - 0.5) * speed;
-            p.y += dySample * 0.4 + (Math.random() - 0.5) * speed;
-            if (!insideShape(stateRef.current.shape, p.x, p.y)) {
-              p.x = Math.min(1, Math.max(0, p.x));
-              p.y = Math.min(1, Math.max(0, p.y));
-              if (!insideShape(stateRef.current.shape, p.x, p.y)) {
-                p.x = 0.5;
-                p.y = 0.5;
+            const step = 0.02;
+            const fade = edgeFade(currentShape, p.x, p.y);
+            const densityAt = (x: number, y: number) => sampleGrid(sand, res, x, y) * edgeFade(currentShape, x, y);
+            // Centered difference for an unbiased gradient estimate -- a
+            // forward-only difference vanishes right at the boundary
+            // (clamped) and silently drifts particles toward higher
+            // coordinates, which is what caused them to pile up on one side.
+            const dxSample = densityAt(Math.min(1, p.x + step), p.y) - densityAt(Math.max(0, p.x - step), p.y);
+            const dySample = densityAt(p.x, Math.min(1, p.y + step)) - densityAt(p.x, Math.max(0, p.y - step));
+            const density = sampleGrid(sand, res, p.x, p.y) * fade;
+            const speed = 0.003 * (1 - density * 0.5);
+            p.x += dxSample * 0.5 + (Math.random() - 0.5) * speed;
+            p.y += dySample * 0.5 + (Math.random() - 0.5) * speed;
+            if (!insideShape(currentShape, p.x, p.y)) {
+              // Reflect back inward instead of clamping to the edge, so
+              // particles never come to rest pinned against the boundary.
+              p.x = Math.min(0.98, Math.max(0.02, p.x));
+              p.y = Math.min(0.98, Math.max(0.02, p.y));
+              if (!insideShape(currentShape, p.x, p.y)) {
+                p.x = 0.5 + (p.x - 0.5) * 0.9;
+                p.y = 0.5 + (p.y - 0.5) * 0.9;
               }
             }
           }

@@ -18,13 +18,14 @@ import { startRecording, stopRecording, type MicRecorderSession } from "@/lib/au
 import { decodeAudioFile, type DecodedAudio } from "@/lib/audio/decode";
 import { encodeWav } from "@/lib/audio/signalGenerator";
 import { formatHz } from "@/lib/utils";
-import { Mic, MicOff, Snowflake, Circle, Square, Loader2, ArrowLeft } from "lucide-react";
+import { Mic, MicOff, Snowflake, Circle, Square, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 
 export default function LivePage() {
   const [controlMode, setControlMode] = useState<"basic" | "advanced">("basic");
   const [presetId, setPresetId] = useState(PLATE_PRESETS[0].id);
   const [settings, setSettings] = useState(DEFAULT_LIVE_SETTINGS);
   const [viewMode, setViewMode] = useState<PlateViewMode>("particles");
+  const [particleReset, setParticleReset] = useState(0);
   const [responseMode, setResponseMode] = useState<"scientific" | "demonstration">("demonstration");
 
   const plate = useMemo(() => PLATE_PRESETS.find((p) => p.id === presetId) ?? PLATE_PRESETS[0], [presetId]);
@@ -206,12 +207,18 @@ export default function LivePage() {
               view={viewMode}
               frozen={live.frozen}
               running={isActive}
+              resetSignal={particleReset}
               className="mx-auto max-w-[560px]"
             />
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-divider)] pt-3">
               <Button variant="secondary" onClick={() => live.setFrozen(!live.frozen)}>
                 <Snowflake className="h-4 w-4" /> {live.frozen ? "Resume visualization" : "Freeze visualization"}
               </Button>
+              {viewMode === "particles" && (
+                <Button variant="secondary" onClick={() => setParticleReset((n) => n + 1)}>
+                  <RefreshCw className="h-4 w-4" /> Reset particles
+                </Button>
+              )}
               <SelectField
                 label="View"
                 value={viewMode}

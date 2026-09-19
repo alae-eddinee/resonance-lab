@@ -31,6 +31,20 @@ describe("computeModeWeights", () => {
     const modes = rectangularModes(plate);
     expect(computeModeWeights(plate, modes, [], { mode: "scientific" })).toEqual([]);
   });
+
+  it("activates a mode from realistically small raw FFT magnitudes", () => {
+    // Regression test: raw FFT bin magnitudes for typical mic/voice input are
+    // often 0.001-0.05, not order-1. Weights must be normalized against the
+    // strongest detected peak so the plate still visibly responds, rather
+    // than every contribution silently falling below the ~0.02 activity
+    // threshold used to decide which modes are "active" everywhere else.
+    const modes = rectangularModes(plate);
+    const target = modes[0];
+    const peaks: SpectralPeak[] = [{ bin: 0, frequencyHz: target.frequencyHz, magnitude: 0.015 }];
+    const weights = computeModeWeights(plate, modes, peaks, { mode: "demonstration" });
+    expect(weights[0].mode.id).toBe(target.id);
+    expect(weights[0].weight).toBeGreaterThan(0.02);
+  });
 });
 
 describe("renderDisplacementField", () => {

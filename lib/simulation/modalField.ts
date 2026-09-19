@@ -24,7 +24,17 @@ export function computeModeWeights(
   const toleranceCents = options.toleranceCents ?? (options.mode === "demonstration" ? 900 : 150);
   const weights = new Map<string, number>();
 
+  // Raw FFT bin magnitudes are typically tiny (often 0.001-0.05 for normal
+  // mic/voice levels) and vary with mic gain, FFT size, and windowing. Using
+  // them directly against an absolute activity threshold meant most real
+  // input never crossed it. Normalizing against the loudest detected peak
+  // makes response robust to input level: the dominant peak always
+  // contributes at full relative strength.
+  const maxMagnitude = peaks.reduce((max, p) => Math.max(max, p.magnitude), 0);
+  if (maxMagnitude <= 0) return [];
+
   for (const peak of peaks) {
+    const relativeMagnitude = peak.magnitude / maxMagnitude;
     for (const mode of modes) {
       if (mode.frequencyHz <= 0) continue;
       const cents = 1200 * Math.log2(peak.frequencyHz / mode.frequencyHz);
@@ -34,7 +44,7 @@ export function computeModeWeights(
       const sampler = modeShapeSampler(config, mode);
       const participation = Math.abs(sampler(config.exciterPosition.x, config.exciterPosition.y));
 
-      const contribution = proximity * peak.magnitude * (0.35 + 0.65 * participation);
+      const contribution = proximity * relativeMagnitude * (0.35 + 0.65 * participation);
       weights.set(mode.id, (weights.get(mode.id) ?? 0) + contribution);
     }
   }

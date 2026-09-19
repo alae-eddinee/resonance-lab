@@ -15,77 +15,110 @@ export function PlateConfigEditor({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <SelectField
-        label="Shape"
-        value={config.geometry.shape}
-        onChange={(shape) => onChange({ ...config, geometry: { ...config.geometry, shape: shape as PlateConfig["geometry"]["shape"] } })}
-        options={[
-          { value: "square", label: "Square" },
-          { value: "rectangle", label: "Rectangle" },
-          { value: "circle", label: "Circle" },
-        ]}
-      />
-
-      {config.geometry.shape === "circle" ? (
-        <SliderField
-          label="Radius"
-          unit="mm"
-          value={config.geometry.radiusM * 1000}
-          min={30}
-          max={300}
-          step={1}
-          onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, radiusM: v / 1000 } })}
-        />
-      ) : (
-        <>
-          <SliderField
-            label="Width"
-            unit="mm"
-            value={config.geometry.widthM * 1000}
-            min={30}
-            max={400}
-            step={1}
-            onChange={(v) =>
-              onChange({
-                ...config,
-                geometry: {
-                  ...config.geometry,
-                  widthM: v / 1000,
-                  heightM: config.geometry.shape === "square" ? v / 1000 : config.geometry.heightM,
-                },
-              })
-            }
-          />
-          {config.geometry.shape === "rectangle" && (
-            <SliderField
-              label="Height"
-              unit="mm"
-              value={config.geometry.heightM * 1000}
-              min={30}
-              max={400}
-              step={1}
-              onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, heightM: v / 1000 } })}
-            />
-          )}
-        </>
+      {controlMode === "basic" && (
+        <p className="text-xs text-[var(--color-text-muted)]">
+          {config.geometry.shape}, {(config.geometry.thicknessM * 1000).toFixed(2)} mm {config.material.name}, {config.boundary}.
+          Switch to Advanced to edit geometry, material, and boundary directly.
+        </p>
       )}
 
-      <SliderField
-        label="Thickness"
-        unit="mm"
-        value={config.geometry.thicknessM * 1000}
-        min={0.2}
-        max={6}
-        step={0.05}
-        onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, thicknessM: v / 1000 } })}
-      />
+      <div>
+        <p className="mb-1.5 text-sm text-[var(--color-text-secondary)]">Excitation position</p>
+        <div className="grid grid-cols-2 gap-3">
+          <SliderField
+            label="X"
+            value={config.exciterPosition.x}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={(v) => onChange({ ...config, exciterPosition: { ...config.exciterPosition, x: v } })}
+          />
+          <SliderField
+            label="Y"
+            value={config.exciterPosition.y}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={(v) => onChange({ ...config, exciterPosition: { ...config.exciterPosition, y: v } })}
+          />
+        </div>
+      </div>
 
-      <SelectField
-        label="Material"
-        value={config.material.id}
-        onChange={(id) => onChange({ ...config, material: findMaterial(id) })}
-        options={MATERIAL_PRESETS.map((m) => ({ value: m.id, label: m.name }))}
-      />
+      {controlMode === "advanced" && (
+        <ControlSection title="Geometry and material">
+          <SelectField
+            label="Shape"
+            value={config.geometry.shape}
+            onChange={(shape) => onChange({ ...config, geometry: { ...config.geometry, shape: shape as PlateConfig["geometry"]["shape"] } })}
+            options={[
+              { value: "square", label: "Square" },
+              { value: "rectangle", label: "Rectangle" },
+              { value: "circle", label: "Circle" },
+            ]}
+          />
+
+          {config.geometry.shape === "circle" ? (
+            <SliderField
+              label="Radius"
+              unit="mm"
+              value={config.geometry.radiusM * 1000}
+              min={30}
+              max={300}
+              step={1}
+              onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, radiusM: v / 1000 } })}
+            />
+          ) : (
+            <>
+              <SliderField
+                label="Width"
+                unit="mm"
+                value={config.geometry.widthM * 1000}
+                min={30}
+                max={400}
+                step={1}
+                onChange={(v) =>
+                  onChange({
+                    ...config,
+                    geometry: {
+                      ...config.geometry,
+                      widthM: v / 1000,
+                      heightM: config.geometry.shape === "square" ? v / 1000 : config.geometry.heightM,
+                    },
+                  })
+                }
+              />
+              {config.geometry.shape === "rectangle" && (
+                <SliderField
+                  label="Height"
+                  unit="mm"
+                  value={config.geometry.heightM * 1000}
+                  min={30}
+                  max={400}
+                  step={1}
+                  onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, heightM: v / 1000 } })}
+                />
+              )}
+            </>
+          )}
+
+          <SliderField
+            label="Thickness"
+            unit="mm"
+            value={config.geometry.thicknessM * 1000}
+            min={0.2}
+            max={6}
+            step={0.05}
+            onChange={(v) => onChange({ ...config, geometry: { ...config.geometry, thicknessM: v / 1000 } })}
+          />
+
+          <SelectField
+            label="Material"
+            value={config.material.id}
+            onChange={(id) => onChange({ ...config, material: findMaterial(id) })}
+            options={MATERIAL_PRESETS.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        </ControlSection>
+      )}
 
       {controlMode === "advanced" && (
         <ControlSection title="Material properties">
@@ -148,23 +181,6 @@ export function PlateConfigEditor({
           />
         </ControlSection>
       )}
-
-      <SliderField
-        label="Exciter position X"
-        value={config.exciterPosition.x}
-        min={0}
-        max={1}
-        step={0.01}
-        onChange={(v) => onChange({ ...config, exciterPosition: { ...config.exciterPosition, x: v } })}
-      />
-      <SliderField
-        label="Exciter position Y"
-        value={config.exciterPosition.y}
-        min={0}
-        max={1}
-        step={0.01}
-        onChange={(v) => onChange({ ...config, exciterPosition: { ...config.exciterPosition, y: v } })}
-      />
 
       {controlMode === "advanced" && (
         <ControlSection title="Solver">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { startMicrophone, stopMicrophone, type MicrophoneSession } from "@/lib/audio/microphone";
+import { startMicrophone, stopMicrophone, setMicrophoneMonitoring, type MicrophoneSession } from "@/lib/audio/microphone";
 import { magnitudeSpectrum } from "@/lib/audio/fft";
 import { applyWindow, windowCoefficients } from "@/lib/audio/windows";
 import {
@@ -66,12 +66,18 @@ export interface LiveCymaticsResult {
   activeModeFrequencies: number[];
   displacementField: Float32Array | null;
   sandDensity: Float32Array | null;
+  monitoring: boolean;
+  setMonitoring: (v: boolean) => void;
+  monitorVolume: number;
+  setMonitorVolume: (v: number) => void;
 }
 
 export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSettings): LiveCymaticsResult {
   const [status, setStatus] = useState<MicPermissionState>("idle");
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [frozen, setFrozen] = useState(false);
+  const [monitoring, setMonitoringState] = useState(false);
+  const [monitorVolume, setMonitorVolumeState] = useState(0.6);
 
   const [rmsDbfs, setRmsDbfs] = useState(-Infinity);
   const [clipping, setClipping] = useState(false);
@@ -211,8 +217,19 @@ export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSetti
     setActiveModeFrequencies([]);
     setDisplacementField(null);
     setSandDensity(null);
+    setMonitoringState(false);
     weightMapRef.current = new Map();
   }, []);
+
+  const setMonitoring = useCallback((enabled: boolean) => {
+    setMonitoringState(enabled);
+    if (sessionRef.current) setMicrophoneMonitoring(sessionRef.current, enabled, monitorVolume);
+  }, [monitorVolume]);
+
+  const setMonitorVolume = useCallback((volume: number) => {
+    setMonitorVolumeState(volume);
+    if (sessionRef.current) setMicrophoneMonitoring(sessionRef.current, monitoring, volume);
+  }, [monitoring]);
 
   useEffect(() => {
     return () => {
@@ -241,5 +258,9 @@ export function useLiveCymatics(config: PlateConfig, settings: LiveCymaticsSetti
     activeModeFrequencies,
     displacementField,
     sandDensity,
+    monitoring,
+    setMonitoring,
+    monitorVolume,
+    setMonitorVolume,
   };
 }

@@ -2,6 +2,7 @@ export interface PlaybackSession {
   audioContext: AudioContext;
   sourceNode: AudioBufferSourceNode;
   analyser: AnalyserNode;
+  gainNode: GainNode;
 }
 
 export function startPlaybackAnalysis(
@@ -11,6 +12,7 @@ export function startPlaybackAnalysis(
   endS: number,
   fftSize: number,
   loop = true,
+  volume = 0.8,
 ): PlaybackSession {
   const AudioContextCtor =
     window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -30,11 +32,19 @@ export function startPlaybackAnalysis(
   analyser.fftSize = fftSize;
   analyser.smoothingTimeConstant = 0;
 
+  const gainNode = audioContext.createGain();
+  gainNode.gain.value = volume;
+
   sourceNode.connect(analyser);
-  analyser.connect(audioContext.destination);
+  analyser.connect(gainNode);
+  gainNode.connect(audioContext.destination);
   sourceNode.start();
 
-  return { audioContext, sourceNode, analyser };
+  return { audioContext, sourceNode, analyser, gainNode };
+}
+
+export function setPlaybackVolume(session: PlaybackSession, volume: number): void {
+  session.gainNode.gain.value = volume;
 }
 
 export async function stopPlaybackAnalysis(session: PlaybackSession): Promise<void> {

@@ -8,9 +8,10 @@ import { WaveformChart } from "@/components/charts/WaveformChart";
 import { SpectrumChart } from "@/components/charts/SpectrumChart";
 import { ChartPanel } from "@/components/charts/ChartPanel";
 import { Button } from "@/components/ui/Button";
-import { SliderField, SelectField } from "@/components/ui/ParameterField";
+import { SliderField, SelectField, ControlSection } from "@/components/ui/ParameterField";
 import { decodeAudioFile, type DecodedAudio } from "@/lib/audio/decode";
 import { SignalGeneratorPanel } from "@/components/audio/SignalGeneratorPanel";
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { setSharedAudioSelection } from "@/lib/audio/sharedAudioStore";
 import { magnitudeSpectrum } from "@/lib/audio/fft";
 import { applyWindow, windowCoefficients } from "@/lib/audio/windows";
@@ -86,6 +87,13 @@ export default function AudioPage() {
               </div>
             </div>
 
+            <AudioPlayer
+              audio={audio}
+              startS={startS}
+              endS={endS || audio.durationS}
+              onTimeUpdate={setScrubS}
+            />
+
             <ChartPanel title="Waveform" evidence="measured-audio" caption="Click to move the analysis cursor.">
               <div
                 onClick={(e) => {
@@ -107,12 +115,6 @@ export default function AudioPage() {
                 <SpectrumChart magnitudes={analysis?.magnitudes ?? null} sampleRate={audio.sampleRate} fftSize={fftSize} />
               </ChartPanel>
               <div className="flex flex-col gap-3">
-                <SelectField
-                  label="FFT size"
-                  value={String(fftSize)}
-                  onChange={(v) => setFftSize(Number(v))}
-                  options={[1024, 2048, 4096, 8192].map((n) => ({ value: String(n), label: `${n} samples` }))}
-                />
                 <SliderField
                   label="Start time"
                   unit="s"
@@ -132,8 +134,16 @@ export default function AudioPage() {
                   onChange={setEndS}
                 />
                 <Button variant="tertiary" onClick={() => { setStartS(0); setEndS(audio.durationS); }}>
-                  Whole file
+                  Use whole file
                 </Button>
+                <ControlSection title="Advanced analysis settings">
+                  <SelectField
+                    label="FFT size"
+                    value={String(fftSize)}
+                    onChange={(v) => setFftSize(Number(v))}
+                    options={[1024, 2048, 4096, 8192].map((n) => ({ value: String(n), label: `${n} samples` }))}
+                  />
+                </ControlSection>
               </div>
             </div>
 

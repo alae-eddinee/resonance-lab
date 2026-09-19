@@ -9,6 +9,7 @@ test.describe("Plate Simulator", () => {
     await expect(resonanceTable.locator("tbody tr").first()).toBeVisible();
     const firstFrequencyText = await resonanceTable.locator("tbody tr").first().locator("td").nth(1).innerText();
 
+    await page.getByRole("button", { name: "Advanced" }).click();
     await page.getByLabel("Shape").selectOption("circle");
     await expect(page.getByLabel("Radius numeric value")).toBeVisible();
 

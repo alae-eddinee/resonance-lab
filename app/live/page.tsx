@@ -218,33 +218,62 @@ export default function LivePage() {
             step={0.1}
             onChange={(v) => setSettings((s) => ({ ...s, sensitivity: v }))}
           />
-          <SliderField
-            label="Noise gate"
-            value={settings.noiseGate}
-            min={0}
-            max={0.2}
-            step={0.005}
-            onChange={(v) => setSettings((s) => ({ ...s, noiseGate: v }))}
-          />
 
-          <SelectField
-            label="Scientific response"
-            value={responseMode}
-            onChange={(v) => setResponseMode(v as "scientific" | "demonstration")}
-            options={[
-              { value: "scientific", label: "Scientific response" },
-              { value: "demonstration", label: "Demonstration response" },
-            ]}
-          />
-          {responseMode === "demonstration" && (
+          <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-divider)] p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={live.monitoring}
+                onChange={(e) => live.setMonitoring(e.target.checked)}
+                disabled={!isActive}
+                className="h-5 w-5"
+              />
+              Hear microphone (monitor audio)
+            </label>
+            {live.monitoring && (
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={live.monitorVolume}
+                onChange={(e) => live.setMonitorVolume(Number(e.target.value))}
+                className="h-11 accent-[var(--color-sand)]"
+                aria-label="Monitor volume"
+              />
+            )}
             <p className="text-xs text-[var(--color-text-muted)]">
-              Demonstration mode maps sound to nearby plate modes for educational visualization. It is not a direct
-              physical prediction.
+              Off by default to avoid feedback through speakers. Use headphones if you turn this on.
             </p>
-          )}
+          </div>
 
           {controlMode === "advanced" && (
             <>
+              <ControlSection title="Detection">
+                <SliderField
+                  label="Noise gate"
+                  value={settings.noiseGate}
+                  min={0}
+                  max={0.2}
+                  step={0.005}
+                  onChange={(v) => setSettings((s) => ({ ...s, noiseGate: v }))}
+                />
+                <SelectField
+                  label="Response mode"
+                  value={responseMode}
+                  onChange={(v) => setResponseMode(v as "scientific" | "demonstration")}
+                  options={[
+                    { value: "scientific", label: "Scientific response" },
+                    { value: "demonstration", label: "Demonstration response" },
+                  ]}
+                />
+                {responseMode === "demonstration" && (
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    Demonstration mode maps sound to nearby plate modes for educational visualization. It is not a
+                    direct physical prediction.
+                  </p>
+                )}
+              </ControlSection>
               <ControlSection title="Input analysis">
                 <SelectField
                   label="FFT size"

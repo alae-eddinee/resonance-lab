@@ -15,7 +15,7 @@ import { PLATE_PRESETS } from "@/lib/physics/presets";
 import { usePlateResponse } from "@/hooks/usePlateResponse";
 import { useAnalyserPeaks } from "@/hooks/useAnalyserPeaks";
 import { startMicrophone, stopMicrophone, type MicrophoneSession } from "@/lib/audio/microphone";
-import { startPlaybackAnalysis, stopPlaybackAnalysis, type PlaybackSession } from "@/lib/audio/playbackAnalyser";
+import { startPlaybackAnalysis, stopPlaybackAnalysis, setPlaybackVolume, type PlaybackSession } from "@/lib/audio/playbackAnalyser";
 import { useSharedAudioSelection } from "@/lib/audio/sharedAudioStore";
 import type { SpectralPeak } from "@/lib/audio/analysis";
 import { formatHz } from "@/lib/utils";
@@ -35,6 +35,7 @@ export default function SimulatorPage() {
   const [micSession, setMicSession] = useState<MicrophoneSession | null>(null);
   const [micStatus, setMicStatus] = useState<"idle" | "pending" | "active" | "denied">("idle");
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
+  const [playbackVolume, setPlaybackVolumeState] = useState(0.8);
   const sharedAudio = useSharedAudioSelection();
 
   const activeAnalyser = source === "microphone" ? micSession?.analyser ?? null : source === "upload" ? playbackSession?.analyser ?? null : null;
@@ -99,6 +100,8 @@ export default function SimulatorPage() {
       sharedAudio.startS,
       sharedAudio.endS,
       2048,
+      true,
+      playbackVolume,
     );
     setPlaybackSession(session);
   }
@@ -284,6 +287,23 @@ export default function SimulatorPage() {
                     {playbackSession ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     {playbackSession ? "Stop playback" : "Play selection"}
                   </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[var(--color-text-muted)]">Volume</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={playbackVolume}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setPlaybackVolumeState(v);
+                        if (playbackSession) setPlaybackVolume(playbackSession, v);
+                      }}
+                      className="h-11 flex-1 accent-[var(--color-sand)]"
+                      aria-label="Playback volume"
+                    />
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-[var(--color-text-muted)]">

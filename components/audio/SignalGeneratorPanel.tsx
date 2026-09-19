@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SelectField, SliderField } from "@/components/ui/ParameterField";
 import {
@@ -30,6 +31,9 @@ export function SignalGeneratorPanel({ onUse }: { onUse: (audio: DecodedAudio, n
   const [sweepMode, setSweepMode] = useState<SweepMode>("linear");
   const [durationS, setDurationS] = useState(2);
   const [amplitude, setAmplitude] = useState(0.4);
+  const [previewing, setPreviewing] = useState(false);
+  const previewElRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
 
   function generate(): Float32Array {
     switch (type) {
@@ -102,11 +106,38 @@ export function SignalGeneratorPanel({ onUse }: { onUse: (audio: DecodedAudio, n
         <Button
           variant="primary"
           onClick={() => {
+            if (previewElRef.current) {
+              previewElRef.current.pause();
+              setPreviewing(false);
+            }
             const samples = generate();
             onUse({ samples, sampleRate: SAMPLE_RATE, channels: 1, durationS: samples.length / SAMPLE_RATE }, `Generated ${type}`);
           }}
         >
           Use in this lab
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            if (previewing && previewElRef.current) {
+              previewElRef.current.pause();
+              setPreviewing(false);
+              return;
+            }
+            if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+            const samples = generate();
+            const url = URL.createObjectURL(encodeWav(samples, SAMPLE_RATE));
+            previewUrlRef.current = url;
+            previewElRef.current?.pause();
+            const el = new Audio(url);
+            el.onended = () => setPreviewing(false);
+            previewElRef.current = el;
+            void el.play();
+            setPreviewing(true);
+          }}
+        >
+          {previewing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {previewing ? "Stop preview" : "Preview"}
         </Button>
         <Button
           variant="secondary"

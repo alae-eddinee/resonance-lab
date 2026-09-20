@@ -45,6 +45,41 @@ describe("computeModeWeights", () => {
     expect(weights[0].mode.id).toBe(target.id);
     expect(weights[0].weight).toBeGreaterThan(0.02);
   });
+
+  describe("demonstration mode with off-resonance input (real music/voice)", () => {
+    // Regression test for a bug found by tracing real numbers end to end: a
+    // plate has only a sparse set of discrete resonances, while real audio's
+    // pitch mostly falls between them. A fixed proximity-tolerance approach
+    // can't win either way: narrow enough to tell different notes apart and
+    // most audio produces zero active modes (looks "dead"/"disappeared");
+    // wide enough to always respond and clearly different notes produce the
+    // identical active-mode set (looks like it "ignores the sound"). Both
+    // were reproduced and shipped at different tolerance values before this
+    // test existed. Demonstration mode must always respond AND distinguish.
+    const modes = rectangularModes({ ...plate, maxModeNumber: 6 });
+
+    it("never produces an empty result for on-plate audio frequencies", () => {
+      for (const freq of [110, 150, 200, 300, 500, 700, 900]) {
+        const weights = computeModeWeights(
+          plate,
+          modes,
+          [{ bin: 0, frequencyHz: freq, magnitude: 0.04 }],
+          { mode: "demonstration" },
+        );
+        expect(weights.length, `expected a response for ${freq} Hz`).toBeGreaterThan(0);
+      }
+    });
+
+    it("gives clearly different frequencies clearly different top modes", () => {
+      const weightsFor = (freq: number) =>
+        computeModeWeights(plate, modes, [{ bin: 0, frequencyHz: freq, magnitude: 0.04 }], {
+          mode: "demonstration",
+        });
+      const low = weightsFor(150);
+      const high = weightsFor(700);
+      expect(low[0].mode.id).not.toBe(high[0].mode.id);
+    });
+  });
 });
 
 describe("renderDisplacementField", () => {

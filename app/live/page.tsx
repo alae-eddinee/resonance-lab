@@ -38,6 +38,7 @@ export default function LivePage() {
   const [recordedAudio, setRecordedAudio] = useState<DecodedAudio | null>(null);
   const recorderRef = useRef<MicRecorderSession | null>(null);
   const offline = useOfflineProcessing();
+  const showingProcessedTake = !!recordedAudio && offline.status === "done" && !!offline.run;
 
   async function toggleRecording() {
     if (recording) {
@@ -72,7 +73,7 @@ export default function LivePage() {
         title="Live Cymatics"
         description="Microphone measurements driving a simulated plate."
         actions={
-          recordedAudio && offline.status === "done" && offline.run ? (
+          showingProcessedTake ? (
             <SaveExperimentButton
               disabled={false}
               disabledReason=""
@@ -171,7 +172,7 @@ export default function LivePage() {
 
       <div className="grid grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:p-8">
         <div className="flex flex-col gap-4">
-          {recordedAudio && offline.status === "done" && offline.run ? (
+          {showingProcessedTake && recordedAudio && offline.run ? (
             <>
               <Button variant="tertiary" onClick={backToLive} className="self-start">
                 <ArrowLeft className="h-4 w-4" /> Back to live view
@@ -233,56 +234,60 @@ export default function LivePage() {
           </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ChartPanel title="Waveform" evidence="measured-audio">
-              <WaveformChart samples={live.waveform} />
-            </ChartPanel>
-            <ChartPanel title="Spectrum" evidence="measured-audio">
-              <SpectrumChart
-                magnitudes={live.magnitudes}
-                sampleRate={44100}
-                fftSize={settings.fftSize}
-                minHz={settings.minFrequencyHz}
-              />
-            </ChartPanel>
-          </div>
+          {!showingProcessedTake && (
+            <>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <ChartPanel title="Waveform" evidence="measured-audio">
+                  <WaveformChart samples={live.waveform} />
+                </ChartPanel>
+                <ChartPanel title="Spectrum" evidence="measured-audio">
+                  <SpectrumChart
+                    magnitudes={live.magnitudes}
+                    sampleRate={44100}
+                    fftSize={settings.fftSize}
+                    minHz={settings.minFrequencyHz}
+                  />
+                </ChartPanel>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm sm:grid-cols-4">
-            <Metric label="Dominant frequency" value={isActive && live.dominantFrequencyHz ? formatHz(live.dominantFrequencyHz) : "—"} />
-            <Metric label="Fundamental estimate" value={isActive && live.fundamentalHz ? formatHz(live.fundamentalHz) : "Unavailable"} />
-            <Metric label="Spectral centroid" value={isActive ? formatHz(live.spectralCentroidHz) : "—"} />
-            <Metric label="Active modes" value={isActive ? String(live.activeModeIds.length) : "—"} />
-          </div>
+              <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm sm:grid-cols-4">
+                <Metric label="Dominant frequency" value={isActive && live.dominantFrequencyHz ? formatHz(live.dominantFrequencyHz) : "—"} />
+                <Metric label="Fundamental estimate" value={isActive && live.fundamentalHz ? formatHz(live.fundamentalHz) : "Unavailable"} />
+                <Metric label="Spectral centroid" value={isActive ? formatHz(live.spectralCentroidHz) : "—"} />
+                <Metric label="Active modes" value={isActive ? String(live.activeModeIds.length) : "—"} />
+              </div>
 
-          <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4">
-            <h3 className="mb-2 text-sm font-semibold">Nearest plate resonances</h3>
-            <table className="w-full text-left text-sm">
-              <thead className="text-[var(--color-text-muted)]">
-                <tr>
-                  <th className="py-1 font-normal">Mode</th>
-                  <th className="py-1 font-normal">Frequency</th>
-                  <th className="py-1 font-normal">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {live.modes.slice(0, 8).map((mode) => (
-                  <tr key={mode.id} className="border-t border-[var(--color-divider)]">
-                    <td className="py-1 tabular-nums">
-                      m={mode.m}, n={mode.n}
-                    </td>
-                    <td className="py-1 tabular-nums">{formatHz(mode.frequencyHz)}</td>
-                    <td className="py-1">
-                      {live.activeModeIds.includes(mode.id) ? (
-                        <span className="text-[var(--color-sand)]">Active</span>
-                      ) : (
-                        <span className="text-[var(--color-text-muted)]">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4">
+                <h3 className="mb-2 text-sm font-semibold">Nearest plate resonances</h3>
+                <table className="w-full text-left text-sm">
+                  <thead className="text-[var(--color-text-muted)]">
+                    <tr>
+                      <th className="py-1 font-normal">Mode</th>
+                      <th className="py-1 font-normal">Frequency</th>
+                      <th className="py-1 font-normal">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {live.modes.slice(0, 8).map((mode) => (
+                      <tr key={mode.id} className="border-t border-[var(--color-divider)]">
+                        <td className="py-1 tabular-nums">
+                          m={mode.m}, n={mode.n}
+                        </td>
+                        <td className="py-1 tabular-nums">{formatHz(mode.frequencyHz)}</td>
+                        <td className="py-1">
+                          {live.activeModeIds.includes(mode.id) ? (
+                            <span className="text-[var(--color-sand)]">Active</span>
+                          ) : (
+                            <span className="text-[var(--color-text-muted)]">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">

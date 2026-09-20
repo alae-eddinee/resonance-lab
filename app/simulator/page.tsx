@@ -29,6 +29,7 @@ export default function SimulatorPage() {
   const [source, setSource] = useState<Source>("tone");
   const [viewMode, setViewMode] = useState<PlateViewMode>("particles");
   const [particleReset, setParticleReset] = useState(0);
+  const [processedActiveModeIds, setProcessedActiveModeIds] = useState<string[]>([]);
 
   const [toneFrequency, setToneFrequencyState] = useState(220);
   const [volume, setVolume] = useState(0.5);
@@ -122,6 +123,7 @@ export default function SimulatorPage() {
 
   const dominantFrequencyHz = source === "tone" ? (isPlaying ? toneFrequency : null) : peaks[0]?.frequencyHz ?? null;
   const showProcessedPlayer = source === "upload" && offline.status === "done" && offline.run && sharedAudio;
+  const currentActiveModeIds = showProcessedPlayer ? processedActiveModeIds : response.activeModeIds;
 
   return (
     <div>
@@ -148,7 +150,7 @@ export default function SimulatorPage() {
               evidenceCategories:
                 source === "tone" ? ["educational-mapping", "physics-simulation"] : ["measured-audio", "physics-simulation"],
               plateConfig: plate,
-              activeModeIds: showProcessedPlayer ? offline.run!.frames.at(-1)?.weights ? Object.keys(offline.run!.frames.at(-1)!.weights) : [] : response.activeModeIds,
+              activeModeIds: currentActiveModeIds,
               measurements: { dominantFrequencyHz: dominantFrequencyHz ?? 0, rmsLevel },
               audioMeta:
                 showProcessedPlayer && sharedAudio
@@ -180,6 +182,7 @@ export default function SimulatorPage() {
               run={offline.run!}
               viewMode={viewMode}
               evidence="measured-audio"
+              onActiveModesChange={setProcessedActiveModeIds}
             />
           ) : (
             <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3">
@@ -301,43 +304,45 @@ export default function SimulatorPage() {
             <Metric label="Level" value={isPlaying ? rmsLevel.toFixed(3) : "—"} />
             <Metric
               label="Active modes"
-              value={showProcessedPlayer || isPlaying ? String(response.activeModeIds.length) : "—"}
+              value={showProcessedPlayer || isPlaying ? String(currentActiveModeIds.length) : "—"}
             />
             <Metric label="Plate" value={`${(plate.geometry.thicknessM * 1000).toFixed(2)} mm ${plate.material.name}`} />
           </div>
 
-          <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4">
-            <h3 className="mb-1 text-sm font-semibold">Resonance table</h3>
-            {response.modes[0] && (
-              <p className="mb-2 text-xs text-[var(--color-text-muted)]">{response.modes[0].limitation}</p>
-            )}
-            <table className="w-full text-left text-sm">
-              <thead className="text-[var(--color-text-muted)]">
-                <tr>
-                  <th className="py-1 font-normal">Mode</th>
-                  <th className="py-1 font-normal">Predicted frequency</th>
-                  <th className="py-1 font-normal">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {response.modes.slice(0, 10).map((mode) => (
-                  <tr key={mode.id} className="border-t border-[var(--color-divider)]">
-                    <td className="py-1 tabular-nums whitespace-nowrap">
-                      m={mode.m}, n={mode.n}
-                    </td>
-                    <td className="py-1 tabular-nums">{formatHz(mode.frequencyHz)}</td>
-                    <td className="py-1">
-                      {response.activeModeIds.includes(mode.id) ? (
-                        <span className="text-[var(--color-sand)]">Active</span>
-                      ) : (
-                        <span className="text-[var(--color-text-muted)]">—</span>
-                      )}
-                    </td>
+          {!showProcessedPlayer && (
+            <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4">
+              <h3 className="mb-1 text-sm font-semibold">Resonance table</h3>
+              {response.modes[0] && (
+                <p className="mb-2 text-xs text-[var(--color-text-muted)]">{response.modes[0].limitation}</p>
+              )}
+              <table className="w-full text-left text-sm">
+                <thead className="text-[var(--color-text-muted)]">
+                  <tr>
+                    <th className="py-1 font-normal">Mode</th>
+                    <th className="py-1 font-normal">Predicted frequency</th>
+                    <th className="py-1 font-normal">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {response.modes.slice(0, 10).map((mode) => (
+                    <tr key={mode.id} className="border-t border-[var(--color-divider)]">
+                      <td className="py-1 tabular-nums whitespace-nowrap">
+                        m={mode.m}, n={mode.n}
+                      </td>
+                      <td className="py-1 tabular-nums">{formatHz(mode.frequencyHz)}</td>
+                      <td className="py-1">
+                        {currentActiveModeIds.includes(mode.id) ? (
+                          <span className="text-[var(--color-sand)]">Active</span>
+                        ) : (
+                          <span className="text-[var(--color-text-muted)]">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">

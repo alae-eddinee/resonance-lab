@@ -17,7 +17,7 @@ test("a quiet, realistic-amplitude tone still activates a plate mode after proce
   await page.getByRole("button", { name: /^Play$/ }).click();
   await page.waitForTimeout(1000);
 
-  const activeModesText = await page.getByText(/Active modes:/).innerText();
-  const count = Number(activeModesText.replace(/[^0-9]/g, "") || "0");
-  expect(count).toBeGreaterThan(0);
+  await expect(page.getByText("Resonance table")).toBeVisible();
+  const activeCount = await page.getByText("Active", { exact: true }).count();
+  expect(activeCount).toBeGreaterThan(0);
 });

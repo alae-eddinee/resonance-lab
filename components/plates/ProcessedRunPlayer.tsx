@@ -7,7 +7,7 @@ import { PlateViewport, type PlateViewMode } from "@/components/plates/PlateView
 import { EvidenceBadge } from "@/components/ui/EvidenceBadge";
 import { useRecordedPlayback } from "@/hooks/useRecordedPlayback";
 import { encodeWav } from "@/lib/audio/signalGenerator";
-import { formatDuration } from "@/lib/utils";
+import { formatDuration, formatHz } from "@/lib/utils";
 import type { RecordedRun } from "@/lib/simulation/offlineProcessor";
 import type { DecodedAudio } from "@/lib/audio/decode";
 
@@ -18,6 +18,7 @@ export function ProcessedRunPlayer({
   run,
   viewMode,
   evidence,
+  onActiveModesChange,
 }: {
   audio: DecodedAudio;
   startS: number;
@@ -25,6 +26,8 @@ export function ProcessedRunPlayer({
   run: RecordedRun;
   viewMode: PlateViewMode;
   evidence: "measured-audio" | "educational-mapping";
+  /** Called whenever the currently-playing frame's active modes change, so a parent page can keep its own resonance table/metrics in sync instead of showing a stale live-mode snapshot. */
+  onActiveModesChange?: (ids: string[]) => void;
 }) {
   const audioElRef = useRef<HTMLAudioElement>(null);
   const timeRef = useRef(0);
@@ -43,6 +46,10 @@ export function ProcessedRunPlayer({
 
   const getTimeS = useMemo(() => () => timeRef.current, []);
   const playback = useRecordedPlayback(run, getTimeS, playing);
+
+  useEffect(() => {
+    onActiveModesChange?.(playback.activeModeIds);
+  }, [playback.activeModeIds, onActiveModesChange]);
 
   function togglePlay() {
     const el = audioElRef.current;
@@ -142,9 +149,39 @@ export function ProcessedRunPlayer({
           />
         </div>
         <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-          Fully processed in advance, so playback stays smooth regardless of device speed. Active modes:{" "}
-          {playback.activeModeIds.length || "none"}
+          Fully processed in advance, so playback stays smooth regardless of device speed.
         </p>
+      </div>
+
+      <div className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4">
+        <h3 className="mb-1 text-sm font-semibold">Resonance table</h3>
+        {run.modes[0] && <p className="mb-2 text-xs text-[var(--color-text-muted)]">{run.modes[0].limitation}</p>}
+        <table className="w-full text-left text-sm">
+          <thead className="text-[var(--color-text-muted)]">
+            <tr>
+              <th className="py-1 font-normal">Mode</th>
+              <th className="py-1 font-normal">Predicted frequency</th>
+              <th className="py-1 font-normal">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {run.modes.slice(0, 10).map((mode) => (
+              <tr key={mode.id} className="border-t border-[var(--color-divider)]">
+                <td className="py-1 tabular-nums whitespace-nowrap">
+                  m={mode.m}, n={mode.n}
+                </td>
+                <td className="py-1 tabular-nums">{formatHz(mode.frequencyHz)}</td>
+                <td className="py-1">
+                  {playback.activeModeIds.includes(mode.id) ? (
+                    <span className="text-[var(--color-sand)]">Active</span>
+                  ) : (
+                    <span className="text-[var(--color-text-muted)]">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

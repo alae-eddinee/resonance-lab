@@ -172,13 +172,13 @@ export function PlateViewport({
             }
           }
         }
-      } else if (!stateRef.current.running) {
-        ctx.font = "13px sans-serif";
-        ctx.fillStyle = "#9ba3b0";
-        ctx.textAlign = "center";
-        ctx.fillText("Start a source to drive this simulation", size / 2, size / 2);
-        ctx.textAlign = "left";
       } else {
+        // Particles always render, even when idle (static) -- previously
+        // this branch was replaced entirely by a text message whenever
+        // `running` was false, which meant the whole particle field flashed
+        // out of existence on every pause/stop transition (and briefly
+        // during any transient play/pause event from the audio element).
+        // Surrounding page text explains how to start a source instead.
         const particles = particlesRef.current;
         const animate = stateRef.current.running && !stateRef.current.frozen && !prefersReducedMotion;
         const currentShape = stateRef.current.shape;
